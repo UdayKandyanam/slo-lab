@@ -1,0 +1,40 @@
+# SLO definition for the sample service in this repo.
+# Written to be read by a person first. The alerts in alerts.yaml and
+# the panels in the Grafana dashboard are all built from the numbers
+# on this page.
+
+service: checkout-api
+
+slo:
+  name: availability
+  description: >
+    Almost every request to checkout-api should succeed. A request
+    counts as good when the service answers with anything other than
+    a 5xx status. Client errors (4xx) count as good, because the
+    service did its job and the caller got a correct answer.
+
+  # The commitment: 99.9 percent of requests succeed.
+  target: 0.999
+  target_percent: 99.9
+
+  # Measured over a rolling window of 30 days.
+  window: 30d
+  window_days: 30
+
+  sli:
+    # The indicator: the ratio of good requests to total requests,
+    # taken straight from the counters the service exports.
+    good_query: 'sum(rate(http_requests_total{job="checkout-api",status!~"5.."}[30d]))'
+    total_query: 'sum(rate(http_requests_total{job="checkout-api"}[30d]))'
+    ratio: "good / total"
+
+  error_budget:
+    # A 99.9 percent target leaves 0.1 percent of requests allowed
+    # to fail inside the window.
+    allowed_failure_fraction: 0.001
+    # In time terms, 0.1 percent of a 30 day month (43,200 minutes)
+    # is 43.2 minutes of full outage. In request terms, a service
+    # that takes 1,000,000 requests in the window may fail 1,000
+    # of them. Both views describe the same budget.
+    allowed_downtime_minutes_per_30_days: 43.2
+    allowed_failures_per_million_requests: 1000

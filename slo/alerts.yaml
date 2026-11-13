@@ -1,0 +1,71 @@
+# Burn rate alerts for the checkout-api SLO in slo.yaml.
+#
+# A burn rate of 1 means the service is failing at exactly the rate
+# the error budget allows, so the budget would run out right at the
+# end of the 30 day window. A burn rate of 14.4 consumes the whole
+# budget in about two days. The thresholds below come from the SLO
+# target of 99.9 percent, which allows a failure fraction of 0.001.
+
+groups:
+  - name: checkout-api-slo
+    rules:
+      # Fast burn. The error ratio over the last hour is more than
+      # 14.4 times the allowed rate, and the last 5 minutes agree,
+      # so this is happening right now and not just an average over
+      # a bad hour. At this pace the monthly budget is gone in
+      # about two days, which is why this one pages a person.
+      - alert: CheckoutAPIFastBurn
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{job="checkout-api",status!~"5.."}[1h]))
+              /
+              sum(rate(http_requests_total{job="checkout-api"}[1h]))
+            )
+          ) > (14.4 * 0.001)
+          and
+          (
+            1 - (
+              sum(rate(http_requests_total{job="checkout-api",status!~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="checkout-api"}[5m]))
+            )
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: page
+          slo: availability
+        annotations:
+          summary: "checkout-api is burning its error budget fast"
+          description: "Error ratio over the last hour is above 14.4 times the rate the 99.9 percent SLO allows. At this pace the 30 day budget runs out in about two days."
+
+      # Slow burn. The error ratio over the last 6 hours is more
+      # than 6 times the allowed rate, and the last 30 minutes
+      # agree, so the problem is steady rather than a spike. The
+      # budget would last about five days at this pace, which is
+      # enough time to fix it in working hours, so this opens a
+      # ticket instead of paging.
+      - alert: CheckoutAPISlowBurn
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{job="checkout-api",status!~"5.."}[6h]))
+              /
+              sum(rate(http_requests_total{job="checkout-api"}[6h]))
+            )
+          ) > (6 * 0.001)
+          and
+          (
+            1 - (
+              sum(rate(http_requests_total{job="checkout-api",status!~"5.."}[30m]))
+              /
+              sum(rate(http_requests_total{job="checkout-api"}[30m]))
+            )
+          ) > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: ticket
+          slo: availability
+        annotations:
+          summary: "checkout-api is burning its error budget slowly"
+          description: "Error ratio over the last 6 hours is above 6 times the rate the 99.9 percent SLO allows. At this pace the 30 day budget runs out in about five days."
